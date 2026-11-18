@@ -97,13 +97,13 @@
     q('nav').innerHTML = ''; q('who').innerHTML = '';
     if (pendingEmail) {
       q('app').innerHTML = '<div class="signin"><div class="panel"><h1>Enter your code</h1>' +
-        '<p class="lead">We emailed a six-digit code to ' + esc(pendingEmail) + '. Type it here. It is valid for one hour.</p>' +
+        '<p class="lead">We emailed a sign-in code to ' + esc(pendingEmail) + '. Type it here. It is valid for one hour.</p>' +
         (msg ? '<div class="err">' + esc(msg) + '</div>' : '') +
-        '<label class="f"><span>Code</span><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456" style="font-size:22px;letter-spacing:4px"></label>' +
+        '<label class="f"><span>Code</span><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="12345678" style="font-size:22px;letter-spacing:4px"></label>' +
         '<div class="actions"><button type="button" class="btn primary" id="verify">Sign in</button><button type="button" class="btn quiet" id="back">Use a different email</button></div></div></div>';
       q('verify').addEventListener('click', function () {
         var code = q('code').value.replace(/\D/g, '');
-        if (code.length < 6) { toast('Enter the six-digit code from the email'); return; }
+        if (code.length < 6) { toast('Enter the code from the email'); return; }
         q('verify').disabled = true;
         sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' }).then(function (r) {
           q('verify').disabled = false;
@@ -117,7 +117,7 @@
       return;
     }
     q('app').innerHTML = '<div class="signin"><div class="panel"><h1>Sign in</h1>' +
-      '<p class="lead">Enter your ' + esc(cfg.ALLOWED_DOMAIN_HINT || 'work') + ' email address and we will email you a six-digit code. No password needed.</p>' +
+      '<p class="lead">Enter your ' + esc(cfg.ALLOWED_DOMAIN_HINT || 'work') + ' email address and we will email you a code. No password needed.</p>' +
       (msg ? '<div class="err">' + esc(msg) + '</div>' : '') +
       '<label class="f"><span>Email</span><input type="email" id="email" autocomplete="email" placeholder="you@' + esc(cfg.ALLOWED_DOMAIN_HINT || 'example.com') + '"></label>' +
       '<div class="actions"><button type="button" class="btn primary" id="sendLink">Send me a code</button></div></div></div>';
