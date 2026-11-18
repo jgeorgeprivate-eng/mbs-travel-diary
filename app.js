@@ -92,22 +92,43 @@
   }
 
   /* ---------- Auth ---------- */
+  var pendingEmail = '';
   function renderSignIn(msg) {
     q('nav').innerHTML = ''; q('who').innerHTML = '';
+    if (pendingEmail) {
+      q('app').innerHTML = '<div class="signin"><div class="panel"><h1>Enter your code</h1>' +
+        '<p class="lead">We emailed a six-digit code to ' + esc(pendingEmail) + '. Type it here. It is valid for one hour.</p>' +
+        (msg ? '<div class="err">' + esc(msg) + '</div>' : '') +
+        '<label class="f"><span>Code</span><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456" style="font-size:22px;letter-spacing:4px"></label>' +
+        '<div class="actions"><button type="button" class="btn primary" id="verify">Sign in</button><button type="button" class="btn quiet" id="back">Use a different email</button></div></div></div>';
+      q('verify').addEventListener('click', function () {
+        var code = q('code').value.replace(/\D/g, '');
+        if (code.length < 6) { toast('Enter the six-digit code from the email'); return; }
+        q('verify').disabled = true;
+        sb.auth.verifyOtp({ email: pendingEmail, token: code, type: 'email' }).then(function (r) {
+          q('verify').disabled = false;
+          if (r.error) { renderSignIn(/expired|invalid/i.test(r.error.message) ? 'That code is wrong or has expired. Check the latest email, or request a new code.' : r.error.message); return; }
+          pendingEmail = '';
+        });
+      });
+      q('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') q('verify').click(); });
+      q('back').addEventListener('click', function () { pendingEmail = ''; renderSignIn(); });
+      q('code').focus();
+      return;
+    }
     q('app').innerHTML = '<div class="signin"><div class="panel"><h1>Sign in</h1>' +
-      '<p class="lead">Enter your ' + esc(cfg.ALLOWED_DOMAIN_HINT || 'work') + ' email address and we will send you a sign-in link. No password needed.</p>' +
+      '<p class="lead">Enter your ' + esc(cfg.ALLOWED_DOMAIN_HINT || 'work') + ' email address and we will email you a six-digit code. No password needed.</p>' +
       (msg ? '<div class="err">' + esc(msg) + '</div>' : '') +
       '<label class="f"><span>Email</span><input type="email" id="email" autocomplete="email" placeholder="you@' + esc(cfg.ALLOWED_DOMAIN_HINT || 'example.com') + '"></label>' +
-      '<div class="actions"><button type="button" class="btn primary" id="sendLink">Send me a link</button></div>' +
-      '<p class="muted" id="sent" style="margin:14px 0 0"></p></div></div>';
+      '<div class="actions"><button type="button" class="btn primary" id="sendLink">Send me a code</button></div></div></div>';
     q('sendLink').addEventListener('click', function () {
       var email = q('email').value.trim().toLowerCase();
       if (!email) { toast('Enter your email address'); return; }
       q('sendLink').disabled = true;
-      sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: location.origin + location.pathname } }).then(function (r) {
+      sb.auth.signInWithOtp({ email: email, options: { shouldCreateUser: true } }).then(function (r) {
         q('sendLink').disabled = false;
-        if (r.error) { q('sent').textContent = ''; renderSignIn(r.error.message.indexOf('not allowed') >= 0 ? 'That email address is not allowed to use the pilot. Ask an admin to add you.' : r.error.message); return; }
-        q('sent').textContent = 'Check your inbox for a link from the Travel Diary. It is valid for one hour.';
+        if (r.error) { renderSignIn(r.error.message.indexOf('not allowed') >= 0 ? 'That email address is not allowed to use the pilot. Ask an admin to add you.' : r.error.message); return; }
+        pendingEmail = email; renderSignIn();
       });
     });
     q('email').addEventListener('keydown', function (e) { if (e.key === 'Enter') q('sendLink').click(); });

@@ -30,13 +30,13 @@ If it stops with an error about `pg_cron` or `pg_net`, go to **Database > Extens
 
 ## 3. Allow sign-in from your app address (5 minutes)
 
-Magic-link sign-in works by emailing a link that returns the person to the app, so Supabase needs to know the app's address.
+Sign-in works by emailing a six-digit code (a link was tried first, but MBS mail security opens links before the reader does and uses them up). Supabase still needs to know the app's address.
 
 1. Decide the GitHub Pages address first. It will be `https://YOUR-GITHUB-USERNAME.github.io/YOUR-REPO-NAME/` (see step 4).
 2. In Supabase open **Authentication > URL Configuration**. Set **Site URL** to that address and add the same address under **Redirect URLs**.
 3. Under **Authentication > Providers**, Email should already be on. Leave "Confirm email" on.
 
-**Email limits.** Supabase's built-in email sender is meant for testing and allows only a few sign-in emails per hour. Each pilot user needs one link per browser (they stay signed in afterwards), so onboarding a group of ten over a day works if they do not all try in the same ten minutes. If that is too tight, add your own sender under **Project Settings > Authentication > SMTP Settings**: a Gmail address with an app password works and needs no domain setup, as does Resend or Brevo if you have a domain.
+**Email limits.** Supabase's built-in email sender is meant for testing and allows only a few sign-in emails per hour. Each pilot user needs one code per browser (they stay signed in afterwards), so onboarding a group of ten over a day works if they do not all try in the same ten minutes. If that is too tight, add your own sender under **Project Settings > Authentication > SMTP Settings**: a Gmail address with an app password works and needs no domain setup, as does Resend or Brevo if you have a domain.
 
 ## 4. Publish the app on GitHub Pages (10 minutes)
 
@@ -44,7 +44,7 @@ Magic-link sign-in works by emailing a link that returns the person to the app, 
 2. On github.com create a new repository (for example `mbs-travel-diary`). Public is fine, because the repository holds only the app code, never the data. Private also works if your GitHub plan allows Pages on private repositories.
 3. Upload `index.html`, `styles.css`, `app.js` and `config.js` to the repository (Add file > Upload files).
 4. Repository **Settings > Pages**: Source "Deploy from a branch", branch `main`, folder `/ (root)`. Save. After a minute the address shows at the top of that page. It should match what you entered in step 3.
-5. Open the address, enter your MBS email, click the link in the email. You should land on the dashboard as admin.
+5. Open the address, enter your MBS email, type the six-digit code from the email. You should land on the dashboard as admin.
 
 To update the app later, upload the changed file again; Pages republishes in about a minute.
 
