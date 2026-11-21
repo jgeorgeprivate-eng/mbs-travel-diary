@@ -191,3 +191,5 @@ th.c-dates,td.c-dates{white-space:nowrap;min-width:130px}
 th.c-adv,td.c-adv{width:1%;white-space:normal}
 td.c-adv .tag{white-space:normal;text-align:center;line-height:1.25;padding:2px 7px}
 .audit td.nowrap{white-space:nowrap}
+.banner{padding:10px 14px;border-radius:6px;margin:0 0 14px}
+.banner.warn{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}

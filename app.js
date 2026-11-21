@@ -85,15 +85,20 @@
   function loadAll() {
     return Promise.all([
       sb.from('people').select('*').order('full_name'),
+      sb.rpc('people_directory'),
       sb.from('advice_levels').select('*'),
       sb.from('trips').select('*, trip_days(*), trip_segments(*)').neq('status', 'draft').order('start_date')
     ]).then(function (r) {
       var errs = r.filter(function (x) { return x.error; });
       if (errs.length) throw new Error(errs.map(function (x) { return x.error.message; }).join('; '));
-      state.people = r[0].data || [];
+      // The directory lists everyone without contact details; the people table adds full rows where the rules allow.
+      var full = {}; (r[0].data || []).forEach(function (p) { full[p.id] = p; });
+      state.people = (r[1].data || []).map(function (d) { return full[d.id] || d; });
+      (r[0].data || []).forEach(function (p) { if (!state.people.some(function (x) { return x.id === p.id; })) state.people.push(p); });
+      state.people.sort(function (a, b) { return a.full_name < b.full_name ? -1 : 1; });
       state.advice = {};
-      (r[1].data || []).forEach(function (a) { state.advice[a.country.toLowerCase()] = a; if (!state.adviceFetched || a.fetched_at > state.adviceFetched) state.adviceFetched = a.fetched_at; });
-      state.trips = (r[2].data || []).map(function (t) {
+      (r[2].data || []).forEach(function (a) { state.advice[a.country.toLowerCase()] = a; if (!state.adviceFetched || a.fetched_at > state.adviceFetched) state.adviceFetched = a.fetched_at; });
+      state.trips = (r[3].data || []).map(function (t) {
         t.days = (t.trip_days || []).sort(function (a, b) { return a.day_date < b.day_date ? -1 : 1; });
         t.segments = (t.trip_segments || []).sort(function (a, b) { return a.sort_order - b.sort_order; });
         delete t.trip_days; delete t.trip_segments; return t;
@@ -206,7 +211,9 @@
     var countries = {}, ccs = {};
     state.trips.forEach(function (t) { tripCountries(t).forEach(function (c) { countries[c] = 1; }); if (t.cost_centre) ccs[t.cost_centre] = 1; });
     var snap = state.adviceFetched ? new Date(state.adviceFetched).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : 'not yet loaded';
+    var stale = state.adviceFetched && (Date.now() - new Date(state.adviceFetched).getTime()) > 3 * 86400000;
     app.innerHTML = '<h1>Where everyone is</h1>' +
+      (stale || !state.adviceFetched ? '<div class="banner warn">Smartraveller advice levels were last refreshed on ' + snap + ' (more than 3 days ago). Levels shown may be out of date. Ask the administrator to check the daily refresh.</div>' : '') +
       '<p class="lead">Pick a date to see who is away, in which city and whether it is a working day for them. Colours are Smartraveller advice levels (last refreshed ' + snap + '). The timeline shows the next eight weeks. Declined trips are not shown.</p>' +
       '<div class="toolbar">' +
       '<label><span>On this date</span><input type="date" id="dashDate" value="' + dashDate + '"></label>' +
@@ -340,7 +347,7 @@
     q('discard').addEventListener('click', function () { draft = null; if (isEdit) location.hash = '#trips'; else renderLog(app); });
     if (isEdit) q('deleteTrip').addEventListener('click', function () {
       if (!confirm('Delete this trip?')) return;
-      sb.from('trips').delete().eq('id', draft.id).then(function (r) { if (r.error) { toast(r.error.message, true); return; } draft = null; toast('Trip deleted'); location.hash = '#trips'; reload(); });
+      sb.rpc('delete_trip', { p_trip: draft.id }).then(function (r) { if (r.error) { toast(r.error.message, true); return; } draft = null; toast('Trip deleted'); location.hash = '#trips'; reload(); });
     });
     renderSegs(); renderDays(); renderSummary();
   }

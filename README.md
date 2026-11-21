@@ -104,3 +104,13 @@ supabase functions deploy smartraveller-sync --project-ref YOUR_PROJECT_REF
 ```
 
 Run these from inside this folder (the one containing `supabase/`).
+
+## Security update, November 2026
+
+Two SQL files, run in this order in the Supabase SQL editor:
+
+1. `supabase/update-2026-11-security-1-functions.sql` (safe while the old app is live). Makes `save_trip`, `delete_trip` and `approve_trip` the only way to change trips, adds `people_directory()`, refuses self-approval and a traveller naming themselves as line manager.
+2. Deploy the new app (it saves and deletes through those functions and reads names through `people_directory()`).
+3. `supabase/update-2026-11-security-2-lockdown.sql`. Removes direct write access to trips, days and segments, limits the people table to your own row (managers, arrangers and admins see all rows including mobiles) and tightens what people can edit about themselves.
+
+`supabase/tests/security-tests.sql` checks these rules on a local Postgres (instructions in its header). supabase-js is self-hosted in `vendor/` (version 2.119.2) rather than loaded from a CDN. The dashboard shows a warning if Smartraveller levels are more than 3 days old.

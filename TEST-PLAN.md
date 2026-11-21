@@ -49,3 +49,14 @@ Suggested group: you (admin), one EA or travel arranger, two frequent travellers
 - Microsoft sign-in instead of email links (needs IT to register the app).
 - The AI itinerary reader.
 - Whether to move the hosting into the MBS Azure tenant, keep it here, or rebuild in Power Apps now that the rules are settled.
+
+## Security scenarios (added November 2026)
+
+- A traveller cannot write to trips, trip_days or trip_segments directly (API call to the table is refused); saving through the form works.
+- A traveller cannot save or delete another person's trip, or change who is travelling.
+- A trip cannot name its own traveller as line manager.
+- A line manager or admin cannot approve or decline their own trip.
+- A traveller sees names of all staff but only their own mobile and email; managers, arrangers and admins see all mobiles.
+- A traveller cannot change their own role, email, cost centre, line manager, active flag or sign-in link.
+- Only an admin can change roles. An arranger can edit other people's details except role.
+- The dashboard shows a warning when advice levels are more than 3 days old.
