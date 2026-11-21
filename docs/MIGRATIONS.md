@@ -38,7 +38,7 @@ where table_schema = 'public' and grantee in ('anon', 'authenticated')
 order by table_name, grantee;
 ```
 
-Expected: `authenticated` has INSERT or UPDATE only on `people`, where row level security limits it further. Nothing for `anon`. Nothing on `trips`, `trip_days`, `trip_segments`, `trip_decisions`, `advice_levels`.
+Expected: only `people` and `allowed_domains` appear, and only for `authenticated`. Row level security limits them: `allowed_domains` is admin only, and `people` has insert and update policies but no delete policy. Nothing for `anon`. Nothing on `trips`, `trip_days`, `trip_segments`, `trip_decisions`, `advice_levels`.
 
 ## Smartraveller feed function
 
