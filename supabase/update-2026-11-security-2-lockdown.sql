@@ -52,3 +52,12 @@ create policy people_update on public.people for update to authenticated
       )
     )
   );
+
+-- ---------------------------------------------------------------
+-- Further tightening: the anonymous role needs no table access, nobody needs truncate,
+-- and advice_levels is written only by the edge function (service role).
+-- ---------------------------------------------------------------
+revoke all on all tables in schema public from anon;
+revoke truncate, references, trigger on public.people, public.trips, public.trip_days, public.trip_segments from authenticated;
+revoke truncate on all tables in schema public from authenticated;
+revoke insert, update, delete on public.advice_levels from authenticated;

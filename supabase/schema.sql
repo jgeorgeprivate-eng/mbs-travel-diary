@@ -499,6 +499,15 @@ grant execute on function public.my_email() to authenticated;
 grant execute on function public.sees_all() to authenticated;
 
 -- ---------------------------------------------------------------
+-- ---------------------------------------------------------------
+-- Further tightening: the anonymous role needs no table access, nobody needs truncate,
+-- and advice_levels is written only by the edge function (service role).
+-- ---------------------------------------------------------------
+revoke all on all tables in schema public from anon;
+revoke truncate, references, trigger on public.people, public.trips, public.trip_days, public.trip_segments from authenticated;
+revoke truncate on all tables in schema public from authenticated;
+revoke insert, update, delete on public.advice_levels from authenticated;
+
 -- First admin. Replace j.george.dean@mbs.edu with your address, keep the quotes.
 -- The row is created now (so the role is in place) and linked when you first sign in.
 -- ---------------------------------------------------------------
