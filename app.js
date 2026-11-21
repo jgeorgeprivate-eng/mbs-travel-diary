@@ -12,6 +12,8 @@
 
   var DAY_TYPES = ['Travel', 'Working', 'Not working', 'Weekend', 'Public holiday', 'Leave'];
   var ADVICE_LABEL = { 1: 'Exercise normal safety precautions', 2: 'Exercise a high degree of caution', 3: 'Reconsider your need to travel', 4: 'Do not travel', 0: 'No Smartraveller advice found' };
+  var COST_CENTRES = ['Exec Ed - MBS Asia', 'Exec Ed - Custom ANZ', 'Exec Ed - Open', 'Award - Academic allowance', 'Award - Teaching', 'Award - Other', 'Marketing', 'External relations', 'Dean\u2019s Office', 'Other'];
+  var ADVICE_SHORT = { 1: 'Normal', 2: 'Caution', 3: 'Reconsider', 4: 'Do not travel', 0: 'No advice found' };
   var state = { session: null, me: null, people: [], trips: [], advice: {}, adviceFetched: null, loaded: false };
   var TODAY = iso(new Date());
 
@@ -61,12 +63,22 @@
     return out;
   }
   function flagTags(a) {
-    return (a.selfDirected ? ' <span class="tag warn">' + a.selfDirected + ' day' + (a.selfDirected === 1 ? '' : 's') + ' not needing travel</span>' : '') + (a.leave ? ' <span class="tag warn">' + a.leave + ' leave day' + (a.leave === 1 ? '' : 's') + ' abroad</span>' : '');
+    return (a.selfDirected ? ' <span class="tag warn">' + a.selfDirected + ' remote working day' + (a.selfDirected === 1 ? '' : 's') + '</span>' : '') + (a.leave ? ' <span class="tag warn">' + a.leave + ' leave day' + (a.leave === 1 ? '' : 's') + ' abroad</span>' : '');
   }
   function statusTag(t) {
     var names = { submitted: 'Awaiting approval', approved: 'Approved', declined: 'Declined', draft: 'Draft' };
     return '<span class="status ' + t.status + '">' + names[t.status] + '</span>';
   }
+  function ccOptions(current) {
+    var list = COST_CENTRES.slice();
+    if (current && list.indexOf(current) < 0) list.push(current); // keep an older free-text value visible until someone changes it
+    return '<option value="">Select cost centre</option>' + list.map(function (c) { return '<option ' + (c === current ? 'selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+  }
+  function ccOrder(set) { // cost centres in the agreed order, then any older values
+    var keys = Object.keys(set), known = COST_CENTRES.filter(function (c) { return set[c]; });
+    return known.concat(keys.filter(function (c) { return COST_CENTRES.indexOf(c) < 0; }).sort());
+  }
+  function advShort(level) { return '<span class="tag adv' + level + '" title="' + esc((level ? 'Level ' + level + ': ' : '') + ADVICE_LABEL[level]) + '">' + ADVICE_SHORT[level] + '</span>'; }
   function countryList() { return '<datalist id="countries">' + Object.keys(state.advice).map(function (k) { return '<option value="' + esc(state.advice[k].country) + '">'; }).join('') + '</datalist>'; }
 
   /* ---------- Data ---------- */
@@ -158,6 +170,7 @@
     var pend = pendingForMe().length;
     if (pend || state.me.role === 'manager' || isAdmin() || state.trips.some(function (t) { return (t.manager_email || '').toLowerCase() === myEmail(); })) views.push(['approvals', 'Approvals' + (pend ? '<span class="badge-count">' + pend + '</span>' : '')]);
     if (canManagePeople()) views.push(['people', 'People']);
+    if (isAdmin()) views.push(['audit', 'Audit log']);
     q('nav').innerHTML = views.map(function (v) { return '<a href="#' + v[0] + '" data-view="' + v[0] + '">' + v[1] + '</a>'; }).join('');
     q('who').innerHTML = '<span>' + esc(state.me.full_name) + '</span><button type="button" id="signout">Sign out</button>';
     q('signout').addEventListener('click', function () { sb.auth.signOut().then(function () { state.session = null; renderSignIn(); }); });
@@ -165,8 +178,9 @@
   var editingId = null, draft = null;
   function currentView() {
     var h = (location.hash || '#dashboard').replace('#', '').split('/')[0];
-    if (['dashboard', 'log', 'trips', 'approvals', 'people'].indexOf(h) < 0) h = 'dashboard';
+    if (['dashboard', 'log', 'trips', 'approvals', 'people', 'audit'].indexOf(h) < 0) h = 'dashboard';
     if (h === 'people' && !canManagePeople()) h = 'dashboard';
+    if (h === 'audit' && !isAdmin()) h = 'dashboard';
     return h;
   }
   function route() {
@@ -178,6 +192,7 @@
     else if (v === 'log') renderLog(app);
     else if (v === 'trips') renderTrips(app);
     else if (v === 'approvals') renderApprovals(app);
+    else if (v === 'audit') renderAudit(app);
     else renderPeople(app);
   }
   window.addEventListener('hashchange', function () { route(); window.scrollTo(0, 0); });
@@ -197,7 +212,7 @@
       '<label><span>On this date</span><input type="date" id="dashDate" value="' + dashDate + '"></label>' +
       '<button type="button" class="btn" id="dashToday">Today</button>' +
       '<label><span>Country</span><select id="dashCountry"><option value="">All countries</option>' + Object.keys(countries).sort().map(function (c) { return '<option ' + (c === dashCountry ? 'selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
-      '<label><span>Cost centre</span><select id="dashCC"><option value="">All cost centres</option>' + Object.keys(ccs).sort().map(function (c) { return '<option ' + (c === dashCC ? 'selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
+      '<label><span>Cost centre</span><select id="dashCC"><option value="">All cost centres</option>' + ccOrder(ccs).map(function (c) { return '<option ' + (c === dashCC ? 'selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label>' +
       '</div><div id="where"></div>' +
       (seesAll() ? '<h2>By cost centre</h2><div class="panel scroll" id="byCC"></div>' : '') +
       '<h2>Next eight weeks</h2><div id="timeline"></div>' +
@@ -232,8 +247,8 @@
   function renderByCC() {
     var el = q('byCC'), horizon = addDays(TODAY, 56), ccs = {};
     state.trips.forEach(function (t) { if (t.cost_centre) ccs[t.cost_centre] = 1; });
-    el.innerHTML = '<table><thead><tr><th>Cost centre</th><th>Away on ' + fmtShort(dashDate) + '</th><th>Trips in next 8 weeks</th><th>Travellers</th><th>Allowance days</th><th>Below 50%</th><th>Working days not needing travel</th><th>Leave days abroad</th><th>Level 3 or 4</th><th>Awaiting approval</th><th>Dean permission missing</th></tr></thead><tbody>' +
-      Object.keys(ccs).sort().map(function (cc) {
+    el.innerHTML = '<table><thead><tr><th>Cost centre</th><th>Away on ' + fmtShort(dashDate) + '</th><th>Trips in next 8 weeks</th><th>Travellers</th><th>Allowance days</th><th>Below 50%</th><th>Remote working</th><th>Leave days abroad</th><th>Level 3 or 4</th><th>Awaiting approval</th><th>Dean permission missing</th></tr></thead><tbody>' +
+      ccOrder(ccs).map(function (cc) {
         var all = state.trips.filter(function (t) { return t.cost_centre === cc && t.status !== 'declined'; });
         var soon = all.filter(function (t) { return t.end_date >= TODAY && t.start_date <= horizon; });
         var away = all.filter(function (t) { return dayFor(t, dashDate); }).length;
@@ -269,10 +284,10 @@
   }
   function renderChecks() {
     var el = q('checks'), trips = liveTrips().filter(function (t) { return !dashCountry || tripCountries(t).indexOf(dashCountry) >= 0; });
-    el.innerHTML = '<table><thead><tr><th>Traveller</th><th>Dates</th><th>Countries</th><th>Smartraveller</th><th>Weekdays away</th><th>Qualifying days</th><th>Business activity 50% test</th><th>Working days not needing travel</th><th>Leave days abroad</th><th>Allowance days</th><th>Approvals</th><th>Entered by</th></tr></thead><tbody>' +
+    el.innerHTML = '<table><thead><tr><th>Traveller</th><th class="c-dates">Dates</th><th>Countries</th><th class="c-adv">Smartraveller</th><th>Weekdays away</th><th>Qualifying days</th><th>Business activity 50% test</th><th>Remote working</th><th>Leave days abroad</th><th>Allowance days</th><th>Approvals</th><th>Entered by</th></tr></thead><tbody>' +
       trips.map(function (t) {
         var p = person(t.traveller_id), a = assess(t), e = person(t.entered_by), lv = tripAdvice(t);
-        return '<tr><td><a href="#log" data-edit="' + t.id + '">' + esc(p.full_name) + '</a>' + (p.kind === 'contractor' ? ' <span class="tag">Contractor</span>' : '') + '</td><td>' + fmtShort(t.start_date) + ' to ' + fmtShort(t.end_date) + '</td><td>' + esc(tripCountries(t).join(', ')) + '</td><td>' + advTag(lv) + '</td><td>' + a.weekdays + '</td><td>' + a.qualifying + '</td>' +
+        return '<tr><td><a href="#log" data-edit="' + t.id + '">' + esc(p.full_name) + '</a>' + (p.kind === 'contractor' ? ' <span class="tag">Contractor</span>' : '') + '</td><td class="c-dates">' + fmtShort(t.start_date) + ' to ' + fmtShort(t.end_date) + '</td><td>' + esc(tripCountries(t).join(', ')) + '</td><td class="c-adv">' + advShort(lv) + '</td><td>' + a.weekdays + '</td><td>' + a.qualifying + '</td>' +
           '<td>' + (a.ok ? '<span class="tag ok">Meets</span>' : '<span class="tag warn">Below 50%</span>') + '</td><td>' + (a.selfDirected ? '<span class="tag warn">' + a.selfDirected + '</span>' : '0') + '</td><td>' + (a.leave ? '<span class="tag warn">' + a.leave + '</span>' : '0') + '</td><td>' + a.allowance + '</td>' +
           '<td>' + statusTag(t) + (t.manager_declared ? '' : ' <span class="tag bad">Not declared</span>') + (lv >= 3 ? (t.dean_permission ? ' <span class="tag ok">Dean</span>' : ' <span class="tag bad">Dean permission missing</span>') : '') + '</td>' +
           '<td>' + (e.id === p.id ? 'Self' : esc(e.full_name)) + '</td></tr>';
@@ -299,7 +314,7 @@
       '<label class="f"><span>Entered by</span><input value="' + esc(person(draft.entered_by).full_name) + '" disabled></label></div>' +
       (onBehalf ? '<p class="note">You are entering this on behalf of ' + esc(person(draft.traveller_id).full_name) + '. They can see and edit it when they sign in.</p>' : '') +
       '<div class="row"><label class="f" style="flex:2 1 320px"><span>Purpose of travel</span><input id="purpose" value="' + esc(draft.purpose) + '" placeholder="e.g. Deliver in-company program, Singapore"></label>' +
-      '<label class="f"><span>Cost centre</span><input id="cc" value="' + esc(draft.cost_centre) + '"></label></div>' +
+      '<label class="f"><span>Cost centre</span><select id="cc">' + ccOptions(draft.cost_centre) + '</select></label></div>' +
       '<div class="row"><label class="f"><span>First day away</span><input type="date" id="start" value="' + esc(draft.start_date) + '"></label>' +
       '<label class="f"><span>Last day away</span><input type="date" id="end" value="' + esc(draft.end_date) + '"></label>' +
       '<label class="f"><span>Line manager email</span><input type="email" id="manager" list="mgrs" value="' + esc(draft.manager_email) + '" placeholder="manager@' + esc(cfg.ALLOWED_DOMAIN_HINT || '') + '"><datalist id="mgrs">' + state.people.filter(function (p) { return p.email; }).map(function (p) { return '<option value="' + esc(p.email) + '">' + esc(p.full_name) + '</option>'; }).join('') + '</datalist></label></div>' +
@@ -313,7 +328,7 @@
 
     q('travellerId').addEventListener('change', function (e) { draft.traveller_id = e.target.value; var p = person(draft.traveller_id); draft.manager_email = p.manager_email || draft.manager_email; draft.cost_centre = p.cost_centre || draft.cost_centre; keepScroll(function () { renderLog(app); }); });
     q('purpose').addEventListener('input', function (e) { draft.purpose = e.target.value; });
-    q('cc').addEventListener('input', function (e) { draft.cost_centre = e.target.value; });
+    q('cc').addEventListener('change', function (e) { draft.cost_centre = e.target.value; });
     q('manager').addEventListener('input', function (e) { draft.manager_email = e.target.value.trim().toLowerCase(); });
     q('approvedDate').addEventListener('input', function (e) { draft.manager_declared_date = e.target.value; });
     q('approved').addEventListener('change', function (e) { draft.manager_declared = e.target.checked; q('approvedRow').style.display = draft.manager_declared ? '' : 'none'; if (draft.manager_declared && !draft.manager_declared_date) { draft.manager_declared_date = TODAY; q('approvedDate').value = TODAY; } });
@@ -397,7 +412,7 @@
       (lv === 4 ? '<div class="policy block">MBS policy does not permit travel to a destination where Smartraveller advises do not travel. This trip cannot be submitted. Talk to your line manager about alternatives.</div>' : '') +
       (lv === 3 ? '<div class="policy dean">At least one destination is at level 3, reconsider your need to travel. MBS policy requires the Dean’s special permission for this trip, in addition to your line manager’s approval.<label class="check"><input type="checkbox" id="deanPermission" ' + (draft.dean_permission ? 'checked' : '') + '><span>The Dean has given special permission for this travel.</span></label><div class="row" id="deanRow" style="' + (draft.dean_permission ? '' : 'display:none') + '"><label class="f" style="flex:0 1 220px;margin:8px 0 0"><span>Date permission was given</span><input type="date" id="deanPermissionDate" value="' + esc(draft.dean_permission_date || '') + '"></label></div></div>' : '') +
       '</div><h3>Business activity 50% test</h3><div class="summary">' +
-      '<div><div class="n">' + draft.days.length + '</div><div class="l">days away</div></div><div><div class="n">' + a.weekdays + '</div><div class="l">weekdays, less Melbourne public holidays</div></div><div><div class="n">' + a.qualifying + '</div><div class="l">qualifying working days</div></div><div><div class="n">' + a.selfDirected + '</div><div class="l">working days not needing travel</div></div><div><div class="n">' + a.leave + '</div><div class="l">leave days abroad</div></div><div><div class="n">' + a.allowance + '</div><div class="l">allowance days claimed</div></div></div>' +
+      '<div><div class="n">' + draft.days.length + '</div><div class="l">days away</div></div><div><div class="n">' + a.weekdays + '</div><div class="l">weekdays, less Melbourne public holidays</div></div><div><div class="n">' + a.qualifying + '</div><div class="l">qualifying working days</div></div><div><div class="n">' + a.selfDirected + '</div><div class="l">remote working days</div></div><div><div class="n">' + a.leave + '</div><div class="l">leave days abroad</div></div><div><div class="n">' + a.allowance + '</div><div class="l">allowance days claimed</div></div></div>' +
       '<div class="verdict ' + (a.ok ? 'ok' : 'bad') + '">' + (a.ok ? 'Meets the business activity 50% test: ' + a.qualifying + ' of ' + a.weekdays + ' weekdays are necessary business travel.' : 'Below the business activity 50% test: ' + a.qualifying + ' of ' + a.weekdays + ' weekdays are necessary business travel. At least ' + Math.ceil(a.weekdays / 2) + ' are needed. You can still submit, and your line manager and Finance will see this flag.') + '</div>';
     var dp = q('deanPermission');
     if (dp) {
@@ -409,6 +424,7 @@
   function saveDraft() {
     var missing = [];
     if (!draft.purpose.trim()) missing.push('purpose');
+    if (!(draft.cost_centre || '').trim()) missing.push('cost centre');
     if (!draft.start_date || !draft.end_date) missing.push('dates');
     if (!draft.manager_email.trim()) missing.push('line manager email');
     if (draft.days.some(function (d) { return !(d.country || '').trim(); })) missing.push('a country for every day');
@@ -479,6 +495,22 @@
     });
   }
 
+  /* ---------- Audit log (admins only) ---------- */
+  function renderAudit(app) {
+    app.innerHTML = '<h1>Audit log</h1><p class="lead">A record of trips edited or deleted by someone other than the traveller, and of approved trips whose Smartraveller rating changed after approval. It shows who, when and which trip, not what was changed. Visible to admins only. Newest first, up to 500 entries.</p><div class="panel scroll" id="auditBody"><div class="loading">Loading</div></div>';
+    sb.from('trip_audit').select('*').order('at', { ascending: false }).limit(500).then(function (r) {
+      var el = q('auditBody'); if (!el) return;
+      if (r.error) { el.innerHTML = '<div class="err">Could not load the audit log: ' + esc(r.error.message) + (/trip_audit/.test(r.error.message) ? ' The database update for the audit log may not have been run yet.' : '') + '</div>'; return; }
+      var rows = r.data || [];
+      if (!rows.length) { el.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+      el.innerHTML = '<table class="audit"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Traveller</th><th>Trip</th><th>Why it was logged</th></tr></thead><tbody>' + rows.map(function (a) {
+        var exists = state.trips.some(function (t) { return t.id === a.trip_id; });
+        return '<tr><td class="nowrap">' + new Date(a.at).toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) + '</td><td>' + esc(a.changed_by_name || 'Unknown') + '</td><td>' + esc(a.action) + '</td><td>' + esc(a.traveller_name || '') + '</td><td>' + (exists ? '<a href="#log" data-edit="' + a.trip_id + '">' + esc(a.trip_label || 'Open trip') + '</a>' : esc(a.trip_label || '') + ' <span class="muted">(deleted)</span>') + '</td><td>' + esc(a.reason) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+      bindOpenLinks(el);
+    });
+  }
+
   /* ---------- People ---------- */
   var newPerson = null;
   function renderPeople(app) {
@@ -487,7 +519,7 @@
       var id = isNew ? 'new' : p.id;
       return '<tr data-p="' + id + '"><td><input data-k="full_name" value="' + esc(p.full_name) + '" placeholder="Full name"></td><td><input data-k="email" type="email" value="' + esc(p.email || '') + '" placeholder="email (optional for contractors)"' + (p.user_id ? ' disabled title="Linked to a sign-in; cannot change"' : '') + '></td>' +
         '<td><select data-k="kind"><option value="staff" ' + (p.kind === 'staff' ? 'selected' : '') + '>Staff</option><option value="contractor" ' + (p.kind === 'contractor' ? 'selected' : '') + '>Contractor</option></select></td>' +
-        '<td><input data-k="cost_centre" value="' + esc(p.cost_centre || '') + '"></td><td><input data-k="manager_email" type="email" value="' + esc(p.manager_email || '') + '"></td><td><input data-k="mobile" value="' + esc(p.mobile || '') + '"></td>' +
+        '<td><select data-k="cost_centre">' + ccOptions(p.cost_centre || '') + '</select></td><td><input data-k="manager_email" type="email" value="' + esc(p.manager_email || '') + '"></td><td><input data-k="mobile" value="' + esc(p.mobile || '') + '"></td>' +
         '<td><select data-k="role"' + (isAdmin() ? '' : ' disabled') + '>' + roles.map(function (r) { return '<option ' + (r === p.role ? 'selected' : '') + '>' + r + '</option>'; }).join('') + '</select></td>' +
         '<td><select data-k="active"><option value="1" ' + (p.active ? 'selected' : '') + '>Active</option><option value="0" ' + (!p.active ? 'selected' : '') + '>Inactive</option></select></td>' +
         '<td>' + (p.user_id ? '<span class="tag ok">Signed in</span>' : '<span class="tag">No sign-in yet</span>') + '</td><td><button type="button" class="btn" data-save="' + id + '">' + (isNew ? 'Add' : 'Save') + '</button></td></tr>';

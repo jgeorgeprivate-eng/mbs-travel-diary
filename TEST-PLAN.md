@@ -28,7 +28,12 @@ Suggested group: you (admin), one EA or travel arranger, two frequent travellers
 | 13 | Admin | Dashboard, pick a date three weeks out | Shows who will be away on that day with mobiles |
 | 14 | Admin | Approvals | Sees trips waiting on other managers and can approve them |
 | 15 | New staff member | Sign in with an MBS address not yet on People | Gets in as a traveller; appears on People; admin sets cost centre and manager |
-| 16 | Outsider | Sign in with a non-MBS address not on People | Link is refused |
+| 16 | Outsider | Sign in with a non-MBS address not on People | Code is refused |
+| 17 | Traveller | Log a trip and open the cost centre list | Ten fixed cost centres, none free text; a trip cannot be submitted without one |
+| 18 | Arranger | Edit a trip that belongs to someone else | Admin sees an Audit log entry: who, when, which trip, "Edited by someone other than the traveller" |
+| 19 | Traveller | Edit an approved trip so a country changes to one with a different Smartraveller level | Trip returns to Awaiting approval; Audit log entry says the rating changed after approval, with both levels |
+| 20 | Traveller | Edit an approved trip without changing the rating (for example change the purpose) | No Audit log entry |
+| 21 | Non-admin | Look for the Audit log tab | No tab; the address #audit goes to the dashboard |
 
 ## Things to record during the pilot
 

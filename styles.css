@@ -185,3 +185,9 @@ th{font-weight:600;color:var(--ink-2);font-size:13.5px}
 header.top .who button{background:transparent;border:1px solid rgba(255,255,255,.3);color:var(--navy-ink);border-radius:var(--radius);padding:4px 10px;cursor:pointer;font-size:14px}
 header.top nav{flex-wrap:wrap}
 @media (max-width:760px){header.top{height:auto;min-height:var(--header-h);padding:8px 12px;flex-wrap:wrap}header.top .who{margin-left:auto}}
+
+/* Checks table: wider dates column, narrow Smartraveller column */
+th.c-dates,td.c-dates{white-space:nowrap;min-width:130px}
+th.c-adv,td.c-adv{width:1%;white-space:normal}
+td.c-adv .tag{white-space:normal;text-align:center;line-height:1.25;padding:2px 7px}
+.audit td.nowrap{white-space:nowrap}

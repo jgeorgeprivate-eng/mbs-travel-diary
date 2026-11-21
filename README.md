@@ -8,7 +8,8 @@ A travel diary and "where is everyone" dashboard for MBS staff and contractors. 
 |---|---|
 | `index.html`, `styles.css`, `app.js` | The app. Upload these to GitHub. |
 | `config.js` | Two values from your Supabase project. Edit, then upload with the app. |
-| `supabase/schema.sql` | Creates the tables, access rules, policy checks and the daily job. Run once in Supabase. |
+| `supabase/schema.sql` | Creates the tables, access rules, policy checks and the audit log. Run once in Supabase on a new project. |
+| `supabase/update-2026-11-audit-log.sql` | Adds the audit log to an installation made before it existed. Run once in Supabase. |
 | `supabase/functions/smartraveller-sync/index.ts` | Reads the Smartraveller feed and stores each country's advice level. Deploy once in Supabase. |
 | `TEST-PLAN.md` | What to try with the pilot group. |
 
@@ -68,9 +69,15 @@ Staff sign in with any MBS address and appear on the **People** page automatical
 - **Contractors** are added on the People page with Type "Contractor". Give them an email if they should sign in themselves (any address works once it is listed here); leave it blank if an EA will always enter their travel.
 - **Mobile** shows on the dashboard country cards, which is the emergency contact view.
 
+## Updating an installation that is already running
+
+When a new version adds database changes it comes with a file in `supabase/` named `update-<month>-<topic>.sql`. Paste it into **SQL Editor > New query** and run it once; it is safe to run twice. Then upload the changed app files to GitHub. The audit log and the approval-level tracking need `update-2026-11-audit-log.sql`. A new installation does not need it, because `schema.sql` already includes it.
+
 ## How the rules work
 
-- Business activity 50% test: of the Monday-to-Friday days away, excluding Melbourne public holidays, at least half must be working days whose activities could not have been done from Melbourne. Travel days count as necessary business travel. Trips below the test can still be submitted; they are flagged for the manager and on the dashboard. Two other things are flagged on every trip, whatever the test result: working days abroad whose activities did not need the person to be overseas (self-directed work, online meetings), and annual leave days taken while abroad.
+- Business activity 50% test: of the Monday-to-Friday days away, excluding Melbourne public holidays, at least half must be working days whose activities could not have been done from Melbourne. Travel days count as necessary business travel. Trips below the test can still be submitted; they are flagged for the manager and on the dashboard. Two other things are flagged on every trip, whatever the test result: remote working days (working days abroad whose activities did not need the person to be overseas, such as self-directed work and online meetings), and annual leave days taken while abroad.
+- Cost centres are chosen from a fixed list (Exec Ed - MBS Asia, Exec Ed - Custom ANZ, Exec Ed - Open, Award - Academic allowance, Award - Teaching, Award - Other, Marketing, External relations, Dean's Office, Other). A trip cannot be submitted without one. To change the list, edit `COST_CENTRES` near the top of `app.js`. Older free-text values stay visible on existing records until someone picks a cost centre from the list.
+- Audit log (admins only, its own tab): one entry when someone other than the traveller edits or deletes a trip, when a traveller deletes a trip that had been approved, and when an approved trip is edited so that its Smartraveller rating differs from the rating it was approved at. Each entry records who, when and which trip, not what changed. The database writes entries itself; nobody can add, change or remove them from the app.
 - Smartraveller level 4 (do not travel): the trip cannot be submitted. Level 3 (reconsider your need to travel): the trip needs a Dean's permission declaration with a date. Both checks run in the browser and again in the database, so they cannot be skipped.
 - Approvals: a submitted trip waits for the line manager named on it. The manager sees it under Approvals, approves or declines with a comment, and the traveller sees the result on the trip. If an approved trip's dates or countries change, it goes back to "Awaiting approval". Admins can approve on any manager's behalf.
 - The dashboard hides declined trips and shows awaiting-approval trips as dashed bars.

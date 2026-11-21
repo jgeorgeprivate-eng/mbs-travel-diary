@@ -1,7 +1,7 @@
 -- MBS Travel Diary: database schema, access rules and scheduled jobs.
 -- Paste the whole file into the Supabase SQL editor and run it once.
 -- Before running, replace the two placeholders near the bottom:
---   YOUR_ADMIN_EMAIL  -> your MBS email address (you become the first admin)
+--   j.george.dean@mbs.edu  -> your MBS email address (you become the first admin)
 --   (the cron section) -> your project URL and anon key, see README step 5
 
 create extension if not exists pgcrypto;
@@ -222,6 +222,70 @@ create policy domains_admin on public.allowed_domains for all to authenticated
   using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
 
 -- ---------------------------------------------------------------
+-- Audit log (admins only). One row when someone other than the traveller edits
+-- or deletes a trip, or when an approved trip is edited and its Smartraveller
+-- rating is no longer the one it was approved at. Written by triggers only,
+-- so nobody can add, change or remove entries from the app.
+-- ---------------------------------------------------------------
+alter table public.trips add column if not exists approved_level int;
+
+create table if not exists public.trip_audit (
+  id             bigint generated always as identity primary key,
+  at             timestamptz not null default now(),
+  trip_id        uuid not null,
+  action         text not null check (action in ('Edited','Deleted')),
+  changed_by     uuid,
+  changed_by_name text,
+  traveller_name text,
+  trip_label     text,
+  reason         text not null
+);
+create index if not exists trip_audit_at_idx on public.trip_audit (at desc);
+
+alter table public.trip_audit enable row level security;
+drop policy if exists audit_admin_read on public.trip_audit;
+create policy audit_admin_read on public.trip_audit for select to authenticated
+  using (public.my_role() = 'admin');
+revoke insert, update, delete, truncate on public.trip_audit from anon, authenticated;
+grant select on public.trip_audit to authenticated;
+
+create or replace function public.level_text(n int) returns text
+language sql immutable as $$ select case when coalesce(n,0) = 0 then 'no advice found' else 'Level ' || n end $$;
+
+create or replace function public.audit_trip_change() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  r text;
+  actor uuid := public.my_person_id();
+  rec public.trips%rowtype;
+begin
+  if tg_op = 'UPDATE' then
+    r := nullif(current_setting('app.audit_reason', true), '');
+    if r is null then return new; end if;
+    perform set_config('app.audit_reason', '', true);
+    rec := new;
+  else
+    if actor is null then return old; end if;
+    if actor is not distinct from old.traveller_id and old.approved_level is null then return old; end if;
+    r := case when actor is distinct from old.traveller_id then 'Deleted by someone other than the traveller' else 'Deleted after approval' end;
+    rec := old;
+  end if;
+  insert into public.trip_audit (trip_id, action, changed_by, changed_by_name, traveller_name, trip_label, reason)
+  values (rec.id,
+          case when tg_op = 'UPDATE' then 'Edited' else 'Deleted' end,
+          actor,
+          (select full_name from public.people where id = actor),
+          (select full_name from public.people where id = rec.traveller_id),
+          rec.purpose || ' (' || to_char(rec.start_date, 'DD Mon YYYY') || ' to ' || to_char(rec.end_date, 'DD Mon YYYY') || ')',
+          r);
+  return null;
+end $$;
+
+drop trigger if exists trips_audit on public.trips;
+create trigger trips_audit after update or delete on public.trips
+  for each row execute function public.audit_trip_change();
+
+-- ---------------------------------------------------------------
 -- save_trip: one call writes the trip, its days and segments together and
 -- enforces the travel policy. Returns the trip id.
 -- ---------------------------------------------------------------
@@ -234,6 +298,7 @@ declare
   v_old_countries text;
   v_new_countries text;
   v_status text;
+  v_reasons text[] := '{}';
   d jsonb; s jsonb; i int := 0;
 begin
   if v_id is not null then
@@ -264,6 +329,19 @@ begin
     end if;
   end if;
   if v_old.status = 'declined' then v_status := 'submitted'; end if;
+
+  -- audit: edits by someone other than the traveller, and rating changes after approval
+  if v_old.id is not null then
+    if public.my_person_id() is distinct from v_old.traveller_id then
+      v_reasons := array_append(v_reasons, 'Edited by someone other than the traveller'::text);
+    end if;
+    if v_old.approved_level is not null and v_old.approved_level <> v_max_level then
+      v_reasons := array_append(v_reasons, ('Smartraveller rating changed after approval, from ' || public.level_text(v_old.approved_level) || ' to ' || public.level_text(v_max_level))::text);
+    end if;
+    if array_length(v_reasons, 1) > 0 then
+      perform set_config('app.audit_reason', array_to_string(v_reasons, '; '), true);
+    end if;
+  end if;
 
   if v_id is null then
     insert into public.trips (traveller_id, entered_by, purpose, cost_centre, start_date, end_date, manager_email,
@@ -322,7 +400,11 @@ begin
   end if;
   if p_decision not in ('approved','declined') then raise exception 'Decision must be approved or declined'; end if;
   update public.trips set status = p_decision, approval_comment = p_comment,
-    approved_by = public.my_email(), approved_at = now() where id = p_trip;
+    approved_by = public.my_email(), approved_at = now(),
+    approved_level = case when p_decision = 'approved' then
+      (select coalesce(max(a.level), 0) from public.trip_days d join public.advice_levels a on lower(a.country) = lower(d.country) where d.trip_id = p_trip)
+      else approved_level end
+  where id = p_trip;
 end $$;
 
 grant execute on function public.save_trip(jsonb) to authenticated;
@@ -333,7 +415,7 @@ grant execute on function public.my_email() to authenticated;
 grant execute on function public.sees_all() to authenticated;
 
 -- ---------------------------------------------------------------
--- First admin. Replace YOUR_ADMIN_EMAIL with your address, keep the quotes.
+-- First admin. Replace j.george.dean@mbs.edu with your address, keep the quotes.
 -- The row is created now (so the role is in place) and linked when you first sign in.
 -- ---------------------------------------------------------------
 insert into public.people (email, full_name, role, kind)
