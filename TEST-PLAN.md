@@ -60,3 +60,20 @@ Suggested group: you (admin), one EA or travel arranger, two frequent travellers
 - A traveller cannot change their own role, email, cost centre, line manager, active flag or sign-in link.
 - Only an admin can change roles. An arranger can edit other people's details except role.
 - The dashboard shows a warning when advice levels are more than 3 days old.
+
+## Added after the review (November 2026)
+
+| # | Who | What | Expect |
+|---|---|---|---|
+| R1 | Traveller | Log a trip with no line manager set on their record | Warning before submit; trip appears under "No approver set" for the arranger |
+| R2 | Arranger | Set the line manager on the traveller | Waiting trip moves to that manager |
+| R3 | Manager | Approve a trip in one tab, then edit the trip as the traveller in another and approve in the first again | Second approve refused: "changed after you opened it" |
+| R4 | Traveller | Edit an approved trip: change a city, then separately only the hotel | City change returns it to Awaiting approval with a "Returned for approval" row; hotel change stays approved |
+| R5 | Traveller | Enter a country not on the list | Not recognised; cannot submit. An arranger can add a manual review note |
+| R6 | Traveller | Log a trip to a Level 3 country with no permission reference | Cannot submit until the date and reference are entered |
+| R7 | Manager | Open a trip they are not the approver for | Read-only view with no approve button |
+| R8 | Anyone | Sign out, sign in as someone else, open Log a trip | No draft from the previous person |
+| R9 | Traveller | Trip from Saturday to Sunday only | Summary reads "No eligible weekdays" |
+| R10 | Traveller | Trip of more than 120 days | Refused with the limit stated |
+| R11 | Admin | Mark a person inactive, then have them try to sign in | Refused |
+| R12 | Admin | Raise a country's advice level in the database for an approved upcoming trip | Trip shows "Advice raised since approval: review" |

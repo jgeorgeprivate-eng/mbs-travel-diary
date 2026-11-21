@@ -1,7 +1,11 @@
 // Smartraveller sync: reads the destinations export feed and writes each
 // country's overall advice level into public.advice_levels.
 // Deploy from the Supabase dashboard (Edge Functions > New function) or with the CLI.
-// Needs no secrets beyond the ones Supabase provides automatically.
+// Needs no secrets beyond the ones Supabase provides automatically. It uses the
+// project's secret key (SUPABASE_SECRET_KEY) where the project has one, and falls
+// back to the older service role key (SUPABASE_SERVICE_ROLE_KEY) otherwise.
+// The response lists any country already in the table that was missing from this
+// refresh, so a partial refresh is visible (the app shows those countries as dated).
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -57,11 +61,17 @@ Deno.serve(async (_req) => {
       return new Response(`Parsed only ${rows.length} countries; feed format may have changed. First item: ${JSON.stringify(items[0]).slice(0, 400)}`, { status: 502 });
     }
 
-    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const key = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!key) return new Response("No secret key or service role key is available to the function", { status: 500 });
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, key);
     const { error } = await supabase.from("advice_levels").upsert(rows, { onConflict: "country" });
     if (error) return new Response(`Database error: ${error.message}`, { status: 500 });
 
-    return new Response(JSON.stringify({ updated: rows.length, at: new Date().toISOString() }), {
+    const seen = new Set(rows.map((r) => r.country.toLowerCase()));
+    const { data: existing } = await supabase.from("advice_levels").select("country");
+    const notRefreshed = (existing ?? []).map((r: any) => r.country as string).filter((c) => !seen.has(c.toLowerCase()));
+
+    return new Response(JSON.stringify({ updated: rows.length, notRefreshed, at: new Date().toISOString() }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

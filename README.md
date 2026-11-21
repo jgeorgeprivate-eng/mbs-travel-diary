@@ -71,6 +71,8 @@ Staff sign in with any MBS address and appear on the **People** page automatical
 
 ## Updating an installation that is already running
 
+The full order and the checks to run afterwards are in `docs/MIGRATIONS.md`. In short:
+
 When a new version adds database changes it comes with a file in `supabase/` named `update-<month>-<topic>.sql`. Paste it into **SQL Editor > New query** and run it once; it is safe to run twice. Then upload the changed app files to GitHub. The audit log and the approval-level tracking need `update-2026-11-audit-log.sql`. A new installation does not need it, because `schema.sql` already includes it.
 
 ## How the rules work
@@ -114,3 +116,17 @@ Two SQL files, run in this order in the Supabase SQL editor:
 3. `supabase/update-2026-11-security-2-lockdown.sql`. Removes direct write access to trips, days and segments, limits the people table to your own row (managers, arrangers and admins see all rows including mobiles) and tightens what people can edit about themselves.
 
 `supabase/tests/security-tests.sql` checks these rules on a local Postgres (instructions in its header). supabase-js is self-hosted in `vendor/` (version 2.119.2) rather than loaded from a CDN. The dashboard shows a warning if Smartraveller levels are more than 3 days old.
+
+## Review update, November 2026
+
+`supabase/update-2026-11-review-fixes.sql` plus the new `app.js` and `rules.js` (publish together; see `docs/MIGRATIONS.md`).
+
+- The approver comes from the traveller's line manager on the People page. The form shows who it is. An admin can decide on anyone's trip. There is no per-manager delegate.
+- Approval is tied to the version that was approved. A change to traveller, approver, dates, any country or city, the number of business, remote or leave days, or Level 3 evidence sends an approved trip back for approval. Hotel, flight and activity text do not. Every decision and every return is recorded and shown on the trip.
+- Two people editing the same trip: the second save is refused and offers to reload.
+- Every destination must be on the Smartraveller list or Australia. A place not on the list needs a note from an arranger or admin.
+- Advice is rechecked at approval. Level 4 cannot be approved. Level 3 needs a date and a reference for the Dean's permission for each destination, with who entered it. Approved trips show a flag if advice rose after approval.
+- Every date from first to last day has one entry, up to 120 days. Purpose and cost centre are required.
+- Inactive people cannot sign in or act. Role is none until a person record is linked and active.
+- Drafts are kept in the same browser only and are cleared on sign-out or when a different person signs in.
+- Trips are fetched for the screen in view, 25 to a page in the Trips list, and the dashboard says when its limit has been reached.

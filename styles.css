@@ -193,3 +193,12 @@ td.c-adv .tag{white-space:normal;text-align:center;line-height:1.25;padding:2px 
 .audit td.nowrap{white-space:nowrap}
 .banner{padding:10px 14px;border-radius:6px;margin:0 0 14px}
 .banner.warn{background:var(--amber-soft);color:var(--amber);border:1px solid var(--amber)}
+.adv-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 0}
+.adv-row .review{display:flex;flex-direction:column;gap:4px;flex:1 1 100%;font-size:14px}
+.l3row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-top:10px;color:var(--ink)}
+.l3row .f{display:flex;flex-direction:column;gap:4px;font-size:14px;flex:1 1 160px}
+.approver{margin:6px 0 0;font-size:15px;color:var(--ink-2)}
+.approver-name{font-weight:600;color:var(--ink)}
+.history{margin:10px 0 0;padding:0;list-style:none;font-size:14px}
+.history li{padding:6px 0;border-top:1px solid var(--line)}
+.tag.info{background:var(--blue-soft,#e8f0fb);color:var(--ink)}
